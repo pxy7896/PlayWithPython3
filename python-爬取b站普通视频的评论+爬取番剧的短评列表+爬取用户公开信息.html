@@ -1,0 +1,240 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>python-爬取b站普通视频的评论+爬取番剧的短评列表+爬取用户公开信息</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h2><a id="_0"></a>爬取普通视频的评论</h2>
+<p>假如已知视频的bvid： BV1dg411KXXE （假的，我隐藏了两位）</p>
+<p>那么查找视频的cid：替换下面链接中的bvid</p>
+<pre><code class="prism language-shell">https://api.bilibili.com/x/player/pagelist?bvid<span class="token operator">=</span>BV1dg411KXXE<span class="token operator">&amp;</span><span class="token assign-left variable">jsonp</span><span class="token operator">=</span>jsonp
+<span class="token comment"># 返回：(可能会变，这是我直接测试时的结果)</span>
+<span class="token punctuation">{</span><span class="token string">"code"</span>:0,<span class="token string">"message"</span><span class="token builtin class-name">:</span><span class="token string">"0"</span>,<span class="token string">"ttl"</span>:1,<span class="token string">"data"</span>:<span class="token punctuation">[</span><span class="token punctuation">{</span><span class="token string">"cid"</span>:44xxxx78, <span class="token punctuation">..</span>.<span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">}</span>
+</code></pre>
+<p>那么，弹幕的内容就在：</p>
+<pre><code class="prism language-shell">http://comment.bilibili.com/查到的cid.xml
+</code></pre>
+<p><img src="https://img-blog.csdnimg.cn/f3f1bea517b44f5399f32ea0d09ad9e2.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6ZmG5rKZ,size_20,color_FFFFFF,t_70,g_se,x_16" alt="在这里插入图片描述"></p>
+<p>可以把这个xml下载下来，按需求分析。</p>
+<h2><a id="_17"></a>爬取番剧排行榜（含播放量、弹幕数、喜欢数、综合得分和评分）</h2>
+<p><img src="https://img-blog.csdnimg.cn/76f1c99906b64678a7556c61a55d6c94.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6ZmG5rKZ,size_20,color_FFFFFF,t_70,g_se,x_16" alt="在这里插入图片描述"><br>
+<img src="https://img-blog.csdnimg.cn/24589e7ee87345cc9c1c272cee695bef.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6ZmG5rKZ,size_20,color_FFFFFF,t_70,g_se,x_16" alt="在这里插入图片描述"></p>
+<pre><code class="prism language-python"><span class="token comment"># 本文件抓取动漫排行榜数据</span>
+<span class="token comment"># 数据库连接位置请修改为自己的用户名和密码</span>
+
+<span class="token keyword">import</span> pymysql
+<span class="token keyword">import</span> requests
+<span class="token keyword">from</span> lxml <span class="token keyword">import</span> etree
+<span class="token keyword">from</span> bs4 <span class="token keyword">import</span> BeautifulSoup
+<span class="token keyword">import</span> time
+
+
+<span class="token keyword">def</span> <span class="token function">get_content</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token comment"># 排行榜</span>
+    url <span class="token operator">=</span> <span class="token string">"https://www.bilibili.com/v/popular/rank/bangumi"</span>
+    <span class="token comment"># 发送请求</span>
+    response <span class="token operator">=</span> requests<span class="token punctuation">.</span>get<span class="token punctuation">(</span>url<span class="token punctuation">,</span> headers<span class="token operator">=</span>headers<span class="token punctuation">)</span><span class="token punctuation">.</span>text
+    <span class="token comment"># 解析为html格式数据</span>
+    html <span class="token operator">=</span> etree<span class="token punctuation">.</span>HTML<span class="token punctuation">(</span>response<span class="token punctuation">)</span>
+    <span class="token comment"># xpath语句解析数据</span>
+    data_list <span class="token operator">=</span> html<span class="token punctuation">.</span>xpath<span class="token punctuation">(</span><span class="token string">"//ul[@class='rank-list pgc-list']/li/div/div[2]"</span><span class="token punctuation">)</span>
+
+    r <span class="token operator">=</span> requests<span class="token punctuation">.</span>get<span class="token punctuation">(</span>url<span class="token punctuation">,</span> headers<span class="token operator">=</span>headers<span class="token punctuation">)</span>
+    soup <span class="token operator">=</span> BeautifulSoup<span class="token punctuation">(</span>r<span class="token punctuation">.</span>text<span class="token punctuation">,</span> <span class="token string">"html.parser"</span><span class="token punctuation">)</span>
+    <span class="token comment"># 获取播放数、弹幕数、追番数</span>
+    temp <span class="token operator">=</span> soup<span class="token punctuation">.</span>find_all<span class="token punctuation">(</span><span class="token string">"span"</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token string">'class'</span><span class="token punctuation">:</span><span class="token string">"data-box"</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+    info <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+    <span class="token comment"># 单位是 万</span>
+    <span class="token keyword">for</span> item <span class="token keyword">in</span> temp<span class="token punctuation">:</span>
+        t <span class="token operator">=</span> item<span class="token punctuation">.</span>text<span class="token punctuation">.</span>strip<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token comment"># 把 亿 改到 万</span>
+        <span class="token keyword">if</span> <span class="token string">'亿'</span> <span class="token keyword">in</span> t<span class="token punctuation">:</span>
+            info<span class="token punctuation">.</span>append<span class="token punctuation">(</span><span class="token builtin">str</span><span class="token punctuation">(</span><span class="token builtin">round</span><span class="token punctuation">(</span><span class="token builtin">float</span><span class="token punctuation">(</span>t<span class="token punctuation">.</span>split<span class="token punctuation">(</span><span class="token string">'亿'</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token operator">*</span> <span class="token number">10000</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token keyword">elif</span> <span class="token string">'万'</span> <span class="token keyword">not</span> <span class="token keyword">in</span> t<span class="token punctuation">:</span>
+            info<span class="token punctuation">.</span>append<span class="token punctuation">(</span><span class="token builtin">str</span><span class="token punctuation">(</span><span class="token builtin">round</span><span class="token punctuation">(</span><span class="token builtin">float</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token number">10000</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token keyword">else</span><span class="token punctuation">:</span>
+            info<span class="token punctuation">.</span>append<span class="token punctuation">(</span>t<span class="token punctuation">.</span>split<span class="token punctuation">(</span><span class="token string">'万'</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+
+    conn <span class="token operator">=</span> pymysql<span class="token punctuation">.</span>connect<span class="token punctuation">(</span>host<span class="token operator">=</span><span class="token string">"localhost"</span><span class="token punctuation">,</span> user<span class="token operator">=</span><span class="token string">"root"</span><span class="token punctuation">,</span> passwd<span class="token operator">=</span><span class="token string">'密码'</span><span class="token punctuation">,</span> db<span class="token operator">=</span><span class="token string">"数据库名称"</span><span class="token punctuation">)</span>
+    <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"数据库连接成功"</span><span class="token punctuation">)</span>
+    i <span class="token operator">=</span> <span class="token number">0</span>
+    j <span class="token operator">=</span> <span class="token number">0</span>
+    <span class="token keyword">for</span> data <span class="token keyword">in</span> data_list<span class="token punctuation">:</span>
+        <span class="token keyword">if</span> i <span class="token operator">&lt;</span> <span class="token number">15</span><span class="token punctuation">:</span>
+            <span class="token comment"># 拿到动漫主页连接</span>
+            next_url <span class="token operator">=</span> <span class="token string">"https:"</span> <span class="token operator">+</span> <span class="token string">""</span><span class="token punctuation">.</span>join<span class="token punctuation">(</span>data<span class="token punctuation">.</span>xpath<span class="token punctuation">(</span><span class="token string">"./a/@href"</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            <span class="token comment"># 拿到每个动漫的综合得分</span>
+            pts <span class="token operator">=</span> <span class="token string">""</span><span class="token punctuation">.</span>join<span class="token punctuation">(</span>data<span class="token punctuation">.</span>xpath<span class="token punctuation">(</span><span class="token string">"./div[3]/div/text()"</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            <span class="token comment"># 动漫名</span>
+            name <span class="token operator">=</span> <span class="token string">""</span><span class="token punctuation">.</span>join<span class="token punctuation">(</span>data<span class="token punctuation">.</span>xpath<span class="token punctuation">(</span><span class="token string">"./a/text()"</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            <span class="token comment"># 请求详细页面</span>
+            r <span class="token operator">=</span> requests<span class="token punctuation">.</span>get<span class="token punctuation">(</span>next_url<span class="token punctuation">,</span> headers<span class="token operator">=</span>headers<span class="token punctuation">)</span>
+            <span class="token comment"># 改编码</span>
+            r<span class="token punctuation">.</span>encoding <span class="token operator">=</span> <span class="token string">"GB2312"</span>
+            soup <span class="token operator">=</span> BeautifulSoup<span class="token punctuation">(</span>r<span class="token punctuation">.</span>text<span class="token punctuation">,</span> <span class="token string">"html.parser"</span><span class="token punctuation">)</span>
+            <span class="token comment"># 找出类名为 score 下的所有 h4 标签</span>
+            score <span class="token operator">=</span> soup<span class="token punctuation">.</span>find_all<span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">"h4"</span><span class="token punctuation">,</span> <span class="token string">".score"</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">.</span>text
+            <span class="token comment"># 调用 insert_sql 将数据插入到数据库</span>
+            insert_sql<span class="token punctuation">(</span>pts<span class="token punctuation">,</span> score<span class="token punctuation">,</span> name<span class="token punctuation">,</span> info<span class="token punctuation">[</span>j<span class="token punctuation">]</span><span class="token punctuation">,</span> info<span class="token punctuation">[</span>j <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> info<span class="token punctuation">[</span>j <span class="token operator">+</span> <span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> conn<span class="token punctuation">)</span>
+            <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"插入成功"</span><span class="token punctuation">)</span>
+            time<span class="token punctuation">.</span>sleep<span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span>
+            i <span class="token operator">+=</span> <span class="token number">1</span>
+            j <span class="token operator">+=</span> <span class="token number">3</span>
+            <span class="token comment">#break</span>
+    conn<span class="token punctuation">.</span>close<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+
+<span class="token keyword">def</span> <span class="token function">insert_sql</span><span class="token punctuation">(</span>pts<span class="token punctuation">,</span> score<span class="token punctuation">,</span> name<span class="token punctuation">,</span> bofang<span class="token punctuation">,</span> danmu<span class="token punctuation">,</span> zhuifan<span class="token punctuation">,</span> conn<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    cur <span class="token operator">=</span> conn<span class="token punctuation">.</span>cursor<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    sql <span class="token operator">=</span> <span class="token triple-quoted-string string">"""insert into content (pts, score, name, bofang, danmu, 
+    zhuifan) values ('{}','{}','{}', '{}', '{}', '{}')"""</span><span class="token punctuation">.</span><span class="token builtin">format</span><span class="token punctuation">(</span>pts<span class="token punctuation">,</span> score<span class="token punctuation">,</span> name<span class="token punctuation">,</span> bofang<span class="token punctuation">,</span> danmu<span class="token punctuation">,</span> zhuifan<span class="token punctuation">)</span>
+    cur<span class="token punctuation">.</span>execute<span class="token punctuation">(</span>sql<span class="token punctuation">)</span>
+    conn<span class="token punctuation">.</span>commit<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    cur<span class="token punctuation">.</span>close<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+
+<span class="token keyword">if</span> __name__ <span class="token operator">==</span> <span class="token string">'__main__'</span><span class="token punctuation">:</span>
+    headers <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token string">'user-agent'</span><span class="token punctuation">:</span> <span class="token string">'Mozilla/5.0'</span><span class="token punctuation">}</span>
+    get_content<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre>
+<h2><a id="_101"></a>爬取排名第一的番剧的短评（评分+内容）和短评作者的信息（性别、等级、关注数和粉丝数）</h2>
+<p><img src="https://img-blog.csdnimg.cn/25a2ff72fa6f469fba459be515db6d38.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6ZmG5rKZ,size_20,color_FFFFFF,t_70,g_se,x_16" alt="在这里插入图片描述"></p>
+<pre><code class="prism language-python"><span class="token comment"># 本文件抓取动漫排行榜第一的作品的短评区数据和关联的用户数据</span>
+<span class="token comment"># 数据库连接位置请修改为自己的用户名和密码</span>
+
+<span class="token keyword">import</span> requests
+<span class="token keyword">import</span> pymysql
+<span class="token keyword">import</span> json
+<span class="token keyword">import</span> time
+
+headers <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token string">'user-agent'</span><span class="token punctuation">:</span> <span class="token string">'Mozilla/5.0'</span><span class="token punctuation">}</span>
+
+<span class="token keyword">def</span> <span class="token function">get_content</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+    comment_api <span class="token operator">=</span> <span class="token string">'https://api.bilibili.com/pgc/review/short/list?media_id=28235154&amp;ps=20&amp;sort=0'</span>
+    <span class="token comment"># 发送get请求</span>
+    response_comment <span class="token operator">=</span> requests<span class="token punctuation">.</span>get<span class="token punctuation">(</span>comment_api<span class="token punctuation">,</span> headers<span class="token operator">=</span>headers<span class="token punctuation">)</span>
+    temp <span class="token operator">=</span> response_comment<span class="token punctuation">.</span>text
+    json_comment <span class="token operator">=</span> json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>temp<span class="token punctuation">)</span>
+
+    <span class="token comment"># 共有多少评论</span>
+    total <span class="token operator">=</span> json_comment<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'total'</span><span class="token punctuation">]</span>
+
+    j <span class="token operator">=</span> <span class="token number">0</span>
+    <span class="token keyword">while</span> j <span class="token operator">&lt;</span> total<span class="token punctuation">:</span>
+        <span class="token comment"># 当前页面的评论数</span>
+        n <span class="token operator">=</span> <span class="token builtin">len</span><span class="token punctuation">(</span>json_comment<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'list'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+        conn <span class="token operator">=</span> pymysql<span class="token punctuation">.</span>connect<span class="token punctuation">(</span>host<span class="token operator">=</span><span class="token string">"localhost"</span><span class="token punctuation">,</span> user<span class="token operator">=</span><span class="token string">"root"</span><span class="token punctuation">,</span> passwd<span class="token operator">=</span><span class="token string">'数据库密码'</span><span class="token punctuation">,</span> db<span class="token operator">=</span><span class="token string">"数据库名称"</span><span class="token punctuation">)</span>
+        <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"数据库连接成功"</span><span class="token punctuation">)</span>
+        <span class="token keyword">for</span> i <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span><span class="token punctuation">:</span>
+
+            <span class="token keyword">try</span><span class="token punctuation">:</span>
+                uname <span class="token operator">=</span> json_comment<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'list'</span><span class="token punctuation">]</span><span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'author'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'uname'</span><span class="token punctuation">]</span>
+                <span class="token builtin">id</span> <span class="token operator">=</span> <span class="token builtin">str</span><span class="token punctuation">(</span>json_comment<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'list'</span><span class="token punctuation">]</span><span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'author'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'mid'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+                content <span class="token operator">=</span> json_comment<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'list'</span><span class="token punctuation">]</span><span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'content'</span><span class="token punctuation">]</span>
+                score <span class="token operator">=</span> <span class="token builtin">str</span><span class="token punctuation">(</span>json_comment<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'list'</span><span class="token punctuation">]</span><span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'score'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+
+                cur <span class="token operator">=</span> conn<span class="token punctuation">.</span>cursor<span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token comment"># 这里因为b站崩过，所以先抓取评论内容，后续再抓取个人信息（性别、等级、关注数和粉丝数）</span>
+                <span class="token comment">#other_info = fetch_user(id)</span>
+                <span class="token triple-quoted-string string">'''
+                sql = """insert into user (uid, uname, content, score, sex, 
+                    level, guanzhu, fensi) values ('{}','{}','{}', '{}', '{}', 
+                    '{}', '{}', '{}')""".format(id, uname, content, score,
+                                            other_info[0], other_info[1], other_info[2], other_info[3])
+                '''</span>
+                sql <span class="token operator">=</span> <span class="token triple-quoted-string string">"""insert into user (uid, uname, content, score) values ('{}','{}','{}', '{}')"""</span><span class="token punctuation">.</span><span class="token builtin">format</span><span class="token punctuation">(</span><span class="token builtin">id</span><span class="token punctuation">,</span> uname<span class="token punctuation">,</span> content<span class="token punctuation">,</span> score<span class="token punctuation">,</span><span class="token punctuation">)</span>
+
+                cur<span class="token punctuation">.</span>execute<span class="token punctuation">(</span>sql<span class="token punctuation">)</span>
+                conn<span class="token punctuation">.</span>commit<span class="token punctuation">(</span><span class="token punctuation">)</span>
+            <span class="token keyword">except</span><span class="token punctuation">:</span>
+                <span class="token comment">#print(uname)</span>
+                cur<span class="token punctuation">.</span>close<span class="token punctuation">(</span><span class="token punctuation">)</span>
+                j <span class="token operator">+=</span> <span class="token number">1</span>
+                <span class="token keyword">continue</span>
+            cur<span class="token punctuation">.</span>close<span class="token punctuation">(</span><span class="token punctuation">)</span>
+            j <span class="token operator">+=</span> <span class="token number">1</span>
+
+        conn<span class="token punctuation">.</span>close<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token comment"># 进入下一个页面</span>
+        comment_api1 <span class="token operator">=</span> comment_api <span class="token operator">+</span> <span class="token string">'&amp;cursor='</span> <span class="token operator">+</span> <span class="token builtin">str</span><span class="token punctuation">(</span>json_comment<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'next'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+        <span class="token keyword">print</span><span class="token punctuation">(</span>comment_api1<span class="token punctuation">)</span>
+        response_comment <span class="token operator">=</span> requests<span class="token punctuation">.</span>get<span class="token punctuation">(</span>comment_api1<span class="token punctuation">,</span> headers<span class="token operator">=</span>headers<span class="token punctuation">)</span>
+        json_comment <span class="token operator">=</span> json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>response_comment<span class="token punctuation">.</span>text<span class="token punctuation">)</span>
+        <span class="token comment"># 报告完成情况</span>
+        <span class="token keyword">if</span> j <span class="token operator">%</span> <span class="token number">50</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">:</span>
+            <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">'已完成 {}% !'</span><span class="token punctuation">.</span><span class="token builtin">format</span><span class="token punctuation">(</span><span class="token builtin">round</span><span class="token punctuation">(</span>j <span class="token operator">/</span> total <span class="token operator">*</span> <span class="token number">100</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        time<span class="token punctuation">.</span>sleep<span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">)</span>
+
+
+<span class="token comment"># 抓取用户个人信息</span>
+<span class="token comment"># 用法：print(fetch_user('28xxxXx'))</span>
+<span class="token keyword">def</span> <span class="token function">fetch_user</span><span class="token punctuation">(</span>uid<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token comment"># 抓取性别和等级</span>
+    url <span class="token operator">=</span> <span class="token string">"https://api.bilibili.com/x/space/acc/info?mid="</span> <span class="token operator">+</span> uid <span class="token operator">+</span><span class="token string">"&amp;jsonp=jsonp"</span>
+    temp <span class="token operator">=</span> requests<span class="token punctuation">.</span>get<span class="token punctuation">(</span>url<span class="token punctuation">,</span> headers<span class="token operator">=</span>headers<span class="token punctuation">)</span>
+    info <span class="token operator">=</span> temp<span class="token punctuation">.</span>text
+    data <span class="token operator">=</span> json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>info<span class="token punctuation">)</span>
+    sex <span class="token operator">=</span> data<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'sex'</span><span class="token punctuation">]</span>
+    level <span class="token operator">=</span> <span class="token builtin">str</span><span class="token punctuation">(</span>data<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'level'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    time<span class="token punctuation">.</span>sleep<span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">)</span>
+    <span class="token comment">#print(sex)</span>
+    <span class="token comment">#print(level)</span>
+    <span class="token comment"># 抓取关注数和粉丝数</span>
+    url2 <span class="token operator">=</span> <span class="token string">"https://api.bilibili.com/x/relation/stat?vmid="</span> <span class="token operator">+</span> uid <span class="token operator">+</span> <span class="token string">"&amp;jsonp=jsonp"</span>
+    temp2 <span class="token operator">=</span> requests<span class="token punctuation">.</span>get<span class="token punctuation">(</span>url2<span class="token punctuation">,</span> headers<span class="token operator">=</span>headers<span class="token punctuation">)</span>
+    info2 <span class="token operator">=</span> temp2<span class="token punctuation">.</span>text
+    data2 <span class="token operator">=</span> json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>info2<span class="token punctuation">)</span>
+    guanzhu <span class="token operator">=</span> <span class="token builtin">str</span><span class="token punctuation">(</span>data2<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'following'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    fensi <span class="token operator">=</span> <span class="token builtin">str</span><span class="token punctuation">(</span>data2<span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'follower'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    <span class="token comment">#print(guanzhu)</span>
+    <span class="token comment">#print(fensi)</span>
+    <span class="token keyword">return</span> <span class="token punctuation">[</span>sex<span class="token punctuation">,</span> level<span class="token punctuation">,</span> guanzhu<span class="token punctuation">,</span> fensi<span class="token punctuation">]</span>
+
+
+<span class="token comment"># 本来是一次插入的，但是昨晚b站一些用户信息查不到（崩掉了</span>
+<span class="token comment"># 本函数更新用户信息：性别、等级、关注数、粉丝数</span>
+<span class="token keyword">def</span> <span class="token function">get_user_info</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+    conn <span class="token operator">=</span> pymysql<span class="token punctuation">.</span>connect<span class="token punctuation">(</span>host<span class="token operator">=</span><span class="token string">"localhost"</span><span class="token punctuation">,</span> user<span class="token operator">=</span><span class="token string">"root"</span><span class="token punctuation">,</span> passwd<span class="token operator">=</span><span class="token string">'数据库名称'</span><span class="token punctuation">,</span> db<span class="token operator">=</span><span class="token string">"数据库密码"</span><span class="token punctuation">)</span>
+    select_uid_sql <span class="token operator">=</span> <span class="token string">"select uid from user;"</span>
+    cur <span class="token operator">=</span> conn<span class="token punctuation">.</span>cursor<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    cur<span class="token punctuation">.</span>execute<span class="token punctuation">(</span>select_uid_sql<span class="token punctuation">)</span>
+    temp <span class="token operator">=</span> cur<span class="token punctuation">.</span>fetchall<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    uids <span class="token operator">=</span> <span class="token punctuation">[</span>i<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token keyword">for</span> i <span class="token keyword">in</span> temp<span class="token punctuation">]</span>
+    <span class="token comment"># 记录用户id</span>
+    <span class="token comment">#with open("uids.txt", "w") as file:</span>
+    <span class="token comment">#    file.write("\n".join(uids))</span>
+
+    <span class="token keyword">for</span> i <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span><span class="token builtin">len</span><span class="token punctuation">(</span>uids<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+        <span class="token comment"># 为避免数据库连接断开，所以每隔50条重新连接一下</span>
+        <span class="token keyword">if</span> i <span class="token operator">%</span> <span class="token number">50</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">:</span>
+            conn <span class="token operator">=</span> pymysql<span class="token punctuation">.</span>connect<span class="token punctuation">(</span>host<span class="token operator">=</span><span class="token string">"localhost"</span><span class="token punctuation">,</span> user<span class="token operator">=</span><span class="token string">"root"</span><span class="token punctuation">,</span> passwd<span class="token operator">=</span><span class="token string">'pxy123'</span><span class="token punctuation">,</span> db<span class="token operator">=</span><span class="token string">"bilibili"</span><span class="token punctuation">)</span>
+            cur <span class="token operator">=</span> conn<span class="token punctuation">.</span>cursor<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token keyword">try</span><span class="token punctuation">:</span>
+            info <span class="token operator">=</span> fetch_user<span class="token punctuation">(</span>uids<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span>
+            <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"ok"</span><span class="token punctuation">)</span>
+            update_sql <span class="token operator">=</span> <span class="token string">"update user set sex='{}', level='{}', guanzhu='{}', fensi='{}' where uid='{}';"</span><span class="token punctuation">.</span><span class="token builtin">format</span><span class="token punctuation">(</span>
+                info<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span> info<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> info<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> info<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">,</span> uids<span class="token punctuation">[</span>i<span class="token punctuation">]</span>
+            <span class="token punctuation">)</span>
+            cur<span class="token punctuation">.</span>execute<span class="token punctuation">(</span>update_sql<span class="token punctuation">)</span>
+            conn<span class="token punctuation">.</span>commit<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token keyword">except</span><span class="token punctuation">:</span>
+            <span class="token keyword">print</span><span class="token punctuation">(</span>uids<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span>
+
+    <span class="token comment"># 关闭连接</span>
+    cur<span class="token punctuation">.</span>close<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    conn<span class="token punctuation">.</span>close<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+
+<span class="token keyword">if</span> __name__ <span class="token operator">==</span> <span class="token string">'__main__'</span><span class="token punctuation">:</span>
+    get_content<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    get_user_info<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre>
+</div>
+</body>
+
+</html>
